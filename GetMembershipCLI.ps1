@@ -41,9 +41,8 @@ $sw = [Diagnostics.Stopwatch]::StartNew()
 
 $orgMembers = @()
 $CSVpath = "adamjag-msftCLI.csv"
-# $Env:AZURE_DEVOPS_EXT_PAT = 'xb6h3wji7svykhzcpwo7wqqpnb776rqptwpkp2i35hwsbdmddh2a'
 $Env:AZURE_DEVOPS_EXT_PAT = ''
-# $adamjag_msft_token = "7lrqir2csurle65jycgkr6mkp6z3z44lgpkjesuuitjueymcgfta"
+
 
 $projectName = "Parts Unlimited"
 az devops configure --defaults project=$projectName organization=https://dev.azure.com/adamjag-msft
