@@ -28,5 +28,5 @@ graph g {
 
 .\GetMembershipREST.ps1
 
-CreateGraph "adamjag-msftREST.csv"
+CreateGraph "filename.csv"
 
