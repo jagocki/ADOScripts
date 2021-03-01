@@ -1,3 +1,6 @@
+param($orgName, $projectName)
+
+
 function CreateMemeberRecord{
     param ($memberDetails, $parentDescriptor)
 
@@ -52,34 +55,40 @@ function GetMembersFromDescriptorREST {
 }
 $sw = [Diagnostics.Stopwatch]::StartNew()
 
-$pat = "PAT"
+$pat = get-content .\pat.txt
 
 Write-Host "Initialize authentication context" -ForegroundColor Yellow
 $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($pat)"))
 $header = @{authorization = "Basic $token"}
 
-$orgName = "ORGNAME"
-
 $groupsUri = "https://vssps.dev.azure.com/$orgName/_apis/graph/groups"
-$groups = Invoke-RestMethod -Uri $groupsUri -Method Get -ContentType "application/json" -Headers $header
+$groupsResponse = Invoke-RestMethod -Uri $groupsUri -Method Get -ContentType "application/json" -Headers $header
 
-$projectName = "Parts Unlimited"
-$CSVpath = "$orgName-REST.csv"
+$projectsUrl = "https://dev.azure.com/$orgName/_apis/projects?api-version=5.0"
 
-$projectResult = @()
+$projects = Invoke-RestMethod -Uri $projectsUrl -Method Get -ContentType "application/json" -Headers $header
 
-$groups = $groups.value | where { $_.principalName -like "*$projectName*"  }
+$projects.value | ForEach-Object {
 
-foreach($group in $groups)
-{
-    write-host  "$($group.principalName) from $projectName"
-    $projectResult += GetMembersFromDescriptorREST $group.descriptor $orgName $group.principalName 2 $header
-    if ($group.displayName -eq 'Project Valid Users')
+    $projectName = $_.name
+    $projectResult = @()
+
+    $groups = $groupsResponse.value | where { $_.principalName -like "*$projectName*"  }
+
+    foreach($group in $groups)
     {
-       $projectResult += CreateMemeberRecord $group $projectName
+        write-host  "$($group.principalName) from $projectName"
+        $projectResult += GetMembersFromDescriptorREST $group.descriptor $orgName $group.principalName 2 $header
+        if ($group.displayName -eq 'Project Valid Users')
+        {
+        $projectResult += CreateMemeberRecord $group $projectName
+        }
+        
     }
-    
+    $CSVpath = "$orgName-$projectName-memebership.csv"
+
+    $projectResult | export-csv -Path $CSVpath -NoTypeInformation -Delimiter ';' 
 }
-$projectResult | export-csv -Path $CSVpath -NoTypeInformation -Delimiter ';'
+
 $sw.Stop()
 $sw.Elapsed
