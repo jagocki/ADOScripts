@@ -358,3 +358,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# ignore logging credential
+pat.txt
+
+# ignore visual studio code files
+.vscode/
