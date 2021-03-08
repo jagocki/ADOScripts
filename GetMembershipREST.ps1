@@ -1,5 +1,18 @@
 param($orgName, $projectName)
 
+function GetMemberDetails{ 
+    param($orgName, $memberDescriptor, $authheader, $indent)
+
+    $lookupUri = "https://vssps.dev.azure.com/$orgName/_apis/graph/subjectlookup?api-version=5.1-preview.1"
+
+    $body= @{
+        'lookupKeys' = @(@{'descriptor' = "$($item.memberDescriptor)" })
+            } | ConvertTo-Json
+    $response = Invoke-RestMethod -Method Post -ContentType 'application/json' -Uri $lookupUri -Body $body -Headers $authheader
+    $memberDetails = $response.value."$($memberDescriptor)"
+    Write-Host (' ' * $indent) 'member ->'  $memberDetails.subjectKind $memberDetails.displayName
+    return $memberDetails 
+}
 
 function CreateMemeberRecord{
     param ($memberDetails, $parentDescriptor)
@@ -20,34 +33,30 @@ function CreateMemeberRecord{
 
 function GetMembersFromDescriptorREST {
     param (
-        $descriptor, $orgName, $groupName, $indent, $authheader
+        $descriptor, $orgName, $groupName, $indent, $authheader, $direction
     )
     $indent += 2
     $lastResult = @()
     Write-Host (' ' * $indent) getting memebers of $groupName with $projectName
     # $members = az devops security group membership list --id $descriptor --relationship members --detect false | ConvertFrom-Json 
 
-    $memberShipUri = "https://vssps.dev.azure.com/$orgName/_apis/Graph/Memberships/" + $descriptor + "?direction=down"
+    $memberShipUri = "https://vssps.dev.azure.com/$orgName/_apis/Graph/Memberships/" + $descriptor + "?direction=$direction"
     $members = Invoke-RestMethod -Uri $memberShipUri -Method Get -ContentType "application/json" -Headers $header
 
     #| ConvertFrom-Json
     #[--relationship {memberof, members}]
     # Write-Host $members
-    $memObjects = $members.value 
+    $membersObjects = $members.value 
     # | Get-Member -Type NoteProperty
-    foreach($item in $memObjects)
+    foreach($item in $membersObjects)
     {
         #get descriptor details
-        $lookupUri = "https://vssps.dev.azure.com/$orgName/_apis/graph/subjectlookup?api-version=5.1-preview.1"
-
-        $body= @{
-            'lookupKeys' = @(@{'descriptor' = "$($item.memberDescriptor)" })
-                } | ConvertTo-Json
-        $response = Invoke-RestMethod -Method Post -ContentType 'application/json' -Uri $lookupUri -Body $body -Headers $authheader
-        $memberDetails = $response.value."$($item.memberDescriptor)"
-        Write-Host (' ' * $indent) 'member ->'  $memberDetails.subjectKind $memberDetails.displayName
+        
+        $memberDetails = GetMemberDetails $orgName $item.memberDescriptor $authheader $indent
 
         $lastResult += CreateMemeberRecord $memberDetails $($item.containerDescriptor)
+
+        #
         
     }
     $indent -= 2
@@ -73,20 +82,43 @@ $projects.value | ForEach-Object {
     $projectName = $_.name
     $projectResult = @()
 
-    $groups = $groupsResponse.value | where { $_.principalName -like "*$projectName*"  }
+    #we get the flat list of project's group
+    #process each of them, get its direct membership and add to the results
+    $projectGroups = $groupsResponse.value | where { $_.principalName -like "*$projectName*"  }
 
-    foreach($group in $groups)
+    foreach($group in $projectGroups)
     {
         write-host  "$($group.principalName) from $projectName"
-        $projectResult += GetMembersFromDescriptorREST $group.descriptor $orgName $group.principalName 2 $header
+        $projectResult += GetMembersFromDescriptorREST $group.descriptor $orgName $group.principalName 2 $header 'down'
         if ($group.displayName -eq 'Project Valid Users')
         {
-        $projectResult += CreateMemeberRecord $group $projectName
+            $projectResult += CreateMemeberRecord $group $projectName
+        }
+    }
+
+    #to fix issue #2 we need to add to the project scoped membership the membership to organization scoped groups 
+    # we reiterate the lists to find the 'up' directed membership
+    $discoveredOrgScopedIdentities = @()
+    foreach($proejctIdentity in $projectGroups)
+    {
+ 
+        $identityMemberOfObjects = GetMembersFromDescriptorREST $proejctIdentity.descriptor $orgName $proejctIdentity.principalName 2 $header 'up'
+       
+        foreach ($parentIdentity in $identityMemberOfObjects)
+        {
+           
+            if( $projectGroups.descriptor -notcontains $parentIdentity.descriptor)
+            {
+                $parentDetails = GetMemberDetails $orgName $parentIdentity.descriptor $header 0
+                $discoveredOrgScopedIdentities += CreateMemeberRecord $parentDetails $orgName
+                $discoveredOrgScopedIdentities += CreateMemeberRecord $proejctIdentity $parentIdentity.descriptor
+            }
         }
         
-    }
-    $CSVpath = "$orgName-$projectName-memebership.csv"
 
+    }
+    $projectResult += $discoveredOrgScopedIdentities
+    $CSVpath = "$orgName-$projectName-memebership.csv"
     $projectResult | export-csv -Path $CSVpath -NoTypeInformation -Delimiter ';' 
 }
 
