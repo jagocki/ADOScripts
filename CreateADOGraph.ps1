@@ -15,7 +15,7 @@ function CreateGraph {
 $membership = Import-Csv -Path $fileName -Delimiter ";"
 
 graph g {
-    node $membership -NodeScript { $_.descriptor} @{label={$_.DisplayName}}
+    node $membership -NodeScript { $_.descriptor} @{label={$_.principalName}}
     edge $membership -FromScript {$_.ParentDescriptor} -ToScript {$_.descriptor}
 } | Export-PSGraph -ShowGraph
 

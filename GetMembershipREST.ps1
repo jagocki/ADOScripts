@@ -114,13 +114,14 @@ $projects.value | ForEach-Object {
     #to fix issue #2 we need to add to the project scoped membership the membership to organization scoped groups 
     # we reiterate the lists to find the 'up' directed membership
     $discoveredOrgScopedIdentities = @()
-    foreach($proejctIdentity in $projectResult)
+    $uniqueProjectDescriptors = $projectResult | select descriptor -Unique
+    foreach($itemDescriptor in $uniqueProjectDescriptors  )
     {
-         $identityMemberOfObjects = GetMembersOfFromDescriptorREST $proejctIdentity.descriptor $orgName $proejctIdentity.principalName 2 $header
+        $proejctIdentity = $projectResult | Where-Object {$_.descriptor -eq $itemDescriptor.descriptor} 
+        $identityMemberOfObjects = GetMembersOfFromDescriptorREST $proejctIdentity.descriptor $orgName $proejctIdentity.principalName 2 $header
        
         foreach ($parentIdentity in $identityMemberOfObjects)
         {
-           
             if( $projectGroups.descriptor -notcontains $parentIdentity.descriptor)
             {
                 $parentDetails = GetMemberDetails $orgName $parentIdentity.descriptor $header 0
@@ -128,8 +129,6 @@ $projects.value | ForEach-Object {
                 $discoveredOrgScopedIdentities += CreateMemeberRecord $proejctIdentity $parentIdentity.descriptor
             }
         }
-        
-
     }
     $projectResult += $discoveredOrgScopedIdentities
 
