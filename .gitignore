@@ -364,3 +364,6 @@ pat.txt
 
 # ignore visual studio code files
 .vscode/
+
+#ignore csv output files
+*.csv

@@ -117,15 +117,18 @@ $projects.value | ForEach-Object {
     $uniqueProjectDescriptors = $projectResult | select descriptor -Unique
     foreach($itemDescriptor in $uniqueProjectDescriptors  )
     {
-        $proejctIdentity = $projectResult | Where-Object {$_.descriptor -eq $itemDescriptor.descriptor} 
+        $proejctIdentity = $projectResult | Where-Object {$_.descriptor -eq $itemDescriptor.descriptor} | select -First 1
         $identityMemberOfObjects = GetMembersOfFromDescriptorREST $proejctIdentity.descriptor $orgName $proejctIdentity.principalName 2 $header
        
         foreach ($parentIdentity in $identityMemberOfObjects)
         {
             if( $projectGroups.descriptor -notcontains $parentIdentity.descriptor)
             {
-                $parentDetails = GetMemberDetails $orgName $parentIdentity.descriptor $header 0
-                $discoveredOrgScopedIdentities += CreateMemeberRecord $parentDetails $orgName
+                if ($discoveredOrgScopedIdentities.descriptor -notcontains $parentIdentity.descriptor )
+                {
+                    $parentDetails = GetMemberDetails $orgName $parentIdentity.descriptor $header 0
+                    $discoveredOrgScopedIdentities += CreateMemeberRecord $parentDetails $orgName
+                }
                 $discoveredOrgScopedIdentities += CreateMemeberRecord $proejctIdentity $parentIdentity.descriptor
             }
         }
